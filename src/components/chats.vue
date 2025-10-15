@@ -81,7 +81,7 @@
               <span class="dot"></span>
               <span class="dot"></span>
             </div>
-            <div class="typing-text">AI đang trả lời...</div>
+            <div class="typing-text">AI đang suy nghĩ...</div>
           </div>
           <div
             class="bubble"
@@ -92,12 +92,19 @@
             "
           >
             <div class="message-text">
-              {{ msg.text }}<span class="cursor">|</span>
+              <MarkdownRenderer :content="msg.text" />
+              <span class="cursor">|</span>
             </div>
             <div class="message-time">Đang nhập...</div>
           </div>
           <div class="bubble" v-else>
-            <div class="message-text">{{ msg.text }}</div>
+            <div class="message-text">
+              <MarkdownRenderer
+                v-if="msg.role === 'assistant'"
+                :content="msg.text"
+              />
+              <span v-else>{{ msg.text }}</span>
+            </div>
             <div class="message-time">{{ formatTime(new Date()) }}</div>
           </div>
         </div>
@@ -179,6 +186,7 @@ import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { authRepository } from "~/services/authRepository";
 import { chatRepository } from "~/services/chatRepository";
 import LoadingSkeleton from "~/components/ui/LoadingSkeleton.vue";
+import MarkdownRenderer from "~/components/ui/MarkdownRenderer.vue";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
 

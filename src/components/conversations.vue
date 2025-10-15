@@ -400,6 +400,8 @@ onMounted(() => {
 .action.primary:hover:not(:disabled) {
   box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
   transform: translateY(-2px);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
 }
 
 .action.secondary {
