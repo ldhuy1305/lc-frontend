@@ -123,6 +123,7 @@
           <div class="conversation-content">
             <div class="conversation-title">
               {{ conv.title || "Cuộc trò chuyện" }}
+              <span v-if="conv.isTyping" class="typing-cursor">|</span>
             </div>
             <div class="conversation-time">
               {{ formatConversationTime(conv.updated_at || conv.created_at) }}
@@ -168,6 +169,7 @@ const loadingList = ref(false);
 const loadingCreate = ref(false);
 const loadingSearch = ref(false);
 const selectedConversationId = ref("");
+const typingIntervals = ref(new Map()); // Để quản lý các interval typing
 
 const toggle = () => {
   collapsed.value = !collapsed.value;
@@ -280,7 +282,71 @@ onMounted(() => {
     selectedConversationId.value = id;
   };
 
+  // Listen for new conversation created events
+  const handleConversationCreated = (e) => {
+    const newConversation = e?.detail;
+    if (newConversation && newConversation.session_id) {
+      // Clear any existing typing interval for this session
+      const existingInterval = typingIntervals.value.get(
+        newConversation.session_id
+      );
+      if (existingInterval) {
+        clearInterval(existingInterval);
+        typingIntervals.value.delete(newConversation.session_id);
+      }
+
+      // Thêm conversation mới vào đầu danh sách với title rỗng để tạo hiệu ứng typing
+      const conversationItem = {
+        session_id: newConversation.session_id,
+        title: "",
+        created_at: newConversation.created_at,
+        updated_at: newConversation.created_at,
+        isTyping: true, // Flag để biết đang trong quá trình typing
+      };
+
+      conversations.value.unshift(conversationItem);
+
+      // Cập nhật selected conversation
+      selectedConversationId.value = newConversation.session_id;
+
+      // Tạo hiệu ứng typing cho title
+      const targetTitle = newConversation.title;
+      let currentIndex = 0;
+
+      const typingInterval = setInterval(() => {
+        if (currentIndex <= targetTitle.length) {
+          // Tìm conversation item trong danh sách và cập nhật title
+          const itemIndex = conversations.value.findIndex(
+            (conv) => conv.session_id === newConversation.session_id
+          );
+          if (itemIndex !== -1) {
+            conversations.value[itemIndex].title = targetTitle.substring(
+              0,
+              currentIndex
+            );
+          }
+          currentIndex++;
+        } else {
+          // Hoàn thành typing
+          clearInterval(typingInterval);
+          typingIntervals.value.delete(newConversation.session_id);
+
+          const itemIndex = conversations.value.findIndex(
+            (conv) => conv.session_id === newConversation.session_id
+          );
+          if (itemIndex !== -1) {
+            conversations.value[itemIndex].isTyping = false;
+          }
+        }
+      }, 80); // Tốc độ typing 80ms mỗi ký tự (chậm hơn để dễ nhìn)
+
+      // Lưu interval để có thể clear sau này
+      typingIntervals.value.set(newConversation.session_id, typingInterval);
+    }
+  };
+
   window.addEventListener("conversation:selected", handleConversationSelected);
+  window.addEventListener("conversation:created", handleConversationCreated);
 
   // Cleanup
   onBeforeUnmount(() => {
@@ -288,6 +354,16 @@ onMounted(() => {
       "conversation:selected",
       handleConversationSelected
     );
+    window.removeEventListener(
+      "conversation:created",
+      handleConversationCreated
+    );
+
+    // Clear all typing intervals
+    typingIntervals.value.forEach((interval) => {
+      clearInterval(interval);
+    });
+    typingIntervals.value.clear();
   });
 });
 </script>
@@ -345,6 +421,25 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #3b82f6, #1e40af);
+  border-radius: 10px;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+  transition: all 0.3s ease;
+}
+
+.brand-icon:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .brand-text {
@@ -623,5 +718,41 @@ onMounted(() => {
   opacity: 1;
   pointer-events: auto;
   transition: opacity 0.3s ease;
+}
+
+/* Typing cursor animation */
+.typing-cursor {
+  display: inline-block;
+  color: #3b82f6;
+  font-weight: 400;
+  animation: blink 1s infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Conversation item animation when added */
+.history-item {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

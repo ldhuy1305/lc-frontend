@@ -3,14 +3,6 @@
     <header class="chat-header">
       <div class="title">
         <div class="title-content">
-          <div class="chat-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H5.17L4 17.17V4H20V16Z"
-                fill="currentColor"
-              />
-            </svg>
-          </div>
           <div class="title-text">
             <strong>Trò chuyện với AI</strong>
             <span v-if="currentConversationId" class="cid"
@@ -60,10 +52,93 @@
           </div>
           <div v-else class="assistant-avatar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z"
+              <!-- Robot Head -->
+              <rect
+                x="6"
+                y="4"
+                width="12"
+                height="10"
+                rx="2"
+                fill="currentColor"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <!-- Robot Antenna -->
+              <line
+                x1="12"
+                y1="4"
+                x2="12"
+                y2="2"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+              <circle cx="12" cy="2" r="1" fill="currentColor" />
+              <!-- Robot Eyes -->
+              <circle cx="9" cy="8" r="1.5" fill="#ffffff" />
+              <circle cx="15" cy="8" r="1.5" fill="#ffffff" />
+              <!-- Robot Eyes Pupils -->
+              <circle cx="9" cy="8" r="0.8" fill="currentColor" />
+              <circle cx="15" cy="8" r="0.8" fill="currentColor" />
+              <!-- Robot Mouth -->
+              <rect
+                x="10"
+                y="11"
+                width="4"
+                height="1.5"
+                rx="0.5"
+                fill="#ffffff"
+              />
+              <!-- Robot Body -->
+              <rect
+                x="7"
+                y="14"
+                width="10"
+                height="8"
+                rx="1"
+                fill="currentColor"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <!-- Robot Control Panel -->
+              <rect x="9" y="16" width="2" height="1" rx="0.3" fill="#ffffff" />
+              <rect
+                x="12"
+                y="16"
+                width="2"
+                height="1"
+                rx="0.3"
+                fill="#ffffff"
+              />
+              <rect x="9" y="18" width="2" height="1" rx="0.3" fill="#ffffff" />
+              <rect
+                x="12"
+                y="18"
+                width="2"
+                height="1"
+                rx="0.3"
+                fill="#ffffff"
+              />
+              <!-- Robot Arms -->
+              <rect
+                x="4"
+                y="16"
+                width="3"
+                height="2"
+                rx="0.5"
                 fill="currentColor"
               />
+              <rect
+                x="17"
+                y="16"
+                width="3"
+                height="2"
+                rx="0.5"
+                fill="currentColor"
+              />
+              <!-- Robot Hands -->
+              <circle cx="5.5" cy="18.5" r="0.8" fill="currentColor" />
+              <circle cx="18.5" cy="18.5" r="0.8" fill="currentColor" />
             </svg>
           </div>
         </div>
@@ -182,7 +257,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
+import { ref, onMounted, onBeforeUnmount, nextTick, watch } from "vue";
 import { authRepository } from "~/services/authRepository";
 import { chatRepository } from "~/services/chatRepository";
 import LoadingSkeleton from "~/components/ui/LoadingSkeleton.vue";
@@ -203,6 +278,41 @@ const loadConversationContext = () => {
   const cid = localStorage.getItem("current_conversation_id") || "";
   currentConversationId.value = cid;
 };
+
+// Hệ thống lưu trữ draft text cho từng conversation
+const saveDraftForConversation = (conversationId: string, text: string) => {
+  if (conversationId) {
+    localStorage.setItem(`draft_${conversationId}`, text);
+  }
+};
+
+const loadDraftForConversation = (conversationId: string) => {
+  if (conversationId) {
+    const savedDraft = localStorage.getItem(`draft_${conversationId}`);
+    return savedDraft || "";
+  }
+  return "";
+};
+
+const clearDraftForConversation = (conversationId: string) => {
+  if (conversationId) {
+    localStorage.removeItem(`draft_${conversationId}`);
+  }
+};
+
+// Auto-save draft khi user nhập
+let draftSaveTimer: NodeJS.Timeout | null = null;
+watch(draft, (newValue) => {
+  if (draftSaveTimer) {
+    clearTimeout(draftSaveTimer);
+  }
+
+  draftSaveTimer = setTimeout(() => {
+    if (currentConversationId.value) {
+      saveDraftForConversation(currentConversationId.value, newValue);
+    }
+  }, 500); // Debounce 500ms
+});
 
 const scrollToBottom = async () => {
   await nextTick();
@@ -290,6 +400,12 @@ const send = async () => {
 
   messages.value.push({ role: "user", text });
   draft.value = "";
+
+  // Clear draft cho conversation hiện tại
+  if (currentConversationId.value) {
+    clearDraftForConversation(currentConversationId.value);
+  }
+
   // Reset textarea height after sending
   if (textareaEl.value) {
     textareaEl.value.style.height = "auto";
@@ -323,14 +439,32 @@ const send = async () => {
           scrollToBottom();
         }
       },
+      // onSessionInfo - nhận thông tin session từ chunk đầu tiên
+      (sessionInfo: {
+        session_id: string;
+        title: string;
+        created_at: string;
+      }) => {
+        newSessionId = sessionInfo.session_id;
+        localStorage.setItem("current_conversation_id", newSessionId);
+        currentConversationId.value = newSessionId;
+
+        // Dispatch event để cập nhật sidebar với conversation mới
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("conversation:created", {
+              detail: {
+                session_id: sessionInfo.session_id,
+                title: sessionInfo.title,
+                created_at: sessionInfo.created_at,
+              },
+            })
+          );
+        }
+      },
       // onComplete - hoàn thành streaming
       () => {
         isWaitingForResponse.value = false;
-        // Lưu session_id nếu có (có thể được trả về trong chunk cuối)
-        if (!existingSessionId && newSessionId) {
-          localStorage.setItem("current_conversation_id", newSessionId);
-          currentConversationId.value = newSessionId;
-        }
       },
       // onError - xử lý lỗi
       (error: Error) => {
@@ -394,6 +528,8 @@ onMounted(async () => {
 
   const currentId = localStorage.getItem("current_conversation_id");
   if (currentId) {
+    // Load draft cho conversation hiện tại
+    draft.value = loadDraftForConversation(currentId);
     await loadHistoryIfAny();
     await scrollToBottom();
   }
@@ -413,8 +549,17 @@ onMounted(async () => {
 
       // Chỉ load nếu conversation ID thay đổi
       if (oldId !== id) {
+        // Lưu draft của conversation cũ
+        if (oldId && draft.value.trim()) {
+          saveDraftForConversation(oldId, draft.value);
+        }
+
         currentConversationId.value = id;
         messages.value = [];
+
+        // Load draft cho conversation mới
+        draft.value = loadDraftForConversation(id);
+
         await loadHistoryIfAny();
         await scrollToBottom();
       }
@@ -422,6 +567,7 @@ onMounted(async () => {
   };
   const onClearCache = () => {
     messages.value = [];
+    draft.value = "";
   };
 
   window.addEventListener("conversation:selected", onSelected);
@@ -433,6 +579,9 @@ onMounted(async () => {
     window.removeEventListener("conversation:clear-cache", onClearCache);
     if (debounceTimer) {
       clearTimeout(debounceTimer);
+    }
+    if (draftSaveTimer) {
+      clearTimeout(draftSaveTimer);
     }
   });
 });
@@ -461,17 +610,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.chat-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #3b82f6, #1e40af);
-  border-radius: 12px;
-  color: white;
 }
 
 .title-text strong {
@@ -553,10 +691,16 @@ onMounted(async () => {
   justify-content: center;
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #3b82f6, #1e40af);
   border-radius: 50%;
   color: white;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.3s ease;
+}
+
+.assistant-avatar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
 }
 
 .message-content {
