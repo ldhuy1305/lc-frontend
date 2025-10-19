@@ -50,7 +50,8 @@
             v-if="
               msg.role === 'assistant' &&
               isWaitingForResponse &&
-              msg.text === ''
+              msg.text === '' &&
+              idx === messages.length - 1
             "
           >
             <div class="typing-indicator">
@@ -63,7 +64,8 @@
             v-else-if="
               msg.role === 'assistant' &&
               isWaitingForResponse &&
-              msg.text !== ''
+              msg.text !== '' &&
+              idx === messages.length - 1
             "
           >
             <div class="message-text">
@@ -839,12 +841,12 @@ onMounted(async () => {
 .typing-indicator {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 4px 0;
 }
 
 .typing-text {
-  font-size: 14px;
+  font-size: 13px;
   opacity: 0.8;
   font-style: italic;
   color: #6b7280;
@@ -855,7 +857,7 @@ onMounted(async () => {
 }
 
 .streaming-content::after {
-  content: "▊";
+  content: "|";
   color: #3b82f6;
   animation: blink 1s infinite;
   font-weight: 100;
@@ -871,6 +873,7 @@ onMounted(async () => {
 .streaming-dots {
   animation: dots 1.5s infinite;
   color: #3b82f6;
+  font-weight: 500;
 }
 
 @keyframes dots {

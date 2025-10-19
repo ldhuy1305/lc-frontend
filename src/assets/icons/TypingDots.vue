@@ -23,14 +23,14 @@ withDefaults(defineProps<Props>(), {
 .typing-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 4px;
+  margin-bottom: 0;
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
-  background: #10b981;
+  width: 6px;
+  height: 6px;
+  background: #3b82f6;
   border-radius: 50%;
   animation: dotPulse 1.4s infinite ease-in-out both;
 }
@@ -39,11 +39,11 @@ withDefaults(defineProps<Props>(), {
   0%,
   80%,
   100% {
-    transform: scale(0.8);
-    opacity: 0.5;
+    transform: scale(0.6);
+    opacity: 0.4;
   }
   40% {
-    transform: scale(1.2);
+    transform: scale(1);
     opacity: 1;
   }
 }
