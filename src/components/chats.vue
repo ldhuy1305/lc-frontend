@@ -53,8 +53,10 @@
               msg.text === ''
             "
           >
-            <TypingDots />
-            <div class="typing-text">AI đang suy nghĩ...</div>
+            <div class="typing-indicator">
+              <TypingDots />
+              <div class="typing-text">AI đang suy nghĩ...</div>
+            </div>
           </div>
           <div
             class="bubble"
@@ -68,10 +70,14 @@
               <MarkdownRenderer
                 :key="`streaming-${idx}-${msg.text.length}`"
                 :content="msg.text"
+                :isStreaming="true"
+                class="streaming-content"
               />
-              <span class="cursor">|</span>
             </div>
-            <div class="message-time">Đang nhập...</div>
+            <div class="message-time">
+              <span class="streaming-indicator">Đang nhập</span>
+              <span class="streaming-dots">...</span>
+            </div>
           </div>
           <div class="bubble" v-else>
             <div class="message-text">
@@ -79,8 +85,9 @@
                 v-if="msg.role === 'assistant'"
                 :key="`completed-${idx}`"
                 :content="msg.text"
+                :isStreaming="false"
               />
-              <span v-else>{{ msg.text }}</span>
+              <span v-else class="user-message">{{ msg.text }}</span>
             </div>
             <div class="message-time">{{ formatTime(new Date()) }}</div>
           </div>
@@ -325,8 +332,10 @@ const send = async () => {
     await chatRepository.createChatStream(
       payload,
       // onChunk - nhận từng chunk dữ liệu
-      (chunk: string) => {
-        streamingText += chunk;
+      (chunk: string | number) => {
+        // Convert chunk to string to handle both string and number
+        const chunkStr = String(chunk);
+        streamingText += chunkStr;
         // Cập nhật tin nhắn cuối cùng (assistant message)
         const lastMessage = messages.value[messages.value.length - 1];
         if (lastMessage && lastMessage.role === "assistant") {
@@ -489,16 +498,21 @@ onMounted(async () => {
   height: 100%;
   width: 100%;
   background: #ffffff;
+  position: relative;
 }
 
 .chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 20px 24px;
   background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
-  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(8px);
 }
 
 .title-content {
@@ -545,15 +559,17 @@ onMounted(async () => {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
-  background: #f8fafc;
+  padding: 24px;
+  background: #fafbfc;
+  scroll-behavior: smooth;
 }
 
 .message {
   display: flex;
-  margin-bottom: 20px;
-  align-items: flex-end;
+  margin-bottom: 24px;
+  align-items: flex-start;
   gap: 12px;
+  animation: messageSlideIn 0.3s ease-out;
 }
 
 .message.user {
@@ -562,6 +578,17 @@ onMounted(async () => {
 
 .message.assistant {
   flex-direction: row;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .avatar {
@@ -605,23 +632,32 @@ onMounted(async () => {
 
 .bubble {
   padding: 16px 20px;
-  border-radius: 20px;
+  border-radius: 18px;
   position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  max-width: 100%;
+  word-wrap: break-word;
+}
+
+.bubble:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .message.user .bubble {
   background: linear-gradient(135deg, #3b82f6, #1e40af);
   color: white;
-  border-bottom-right-radius: 6px;
+  border-bottom-right-radius: 4px;
+  margin-left: auto;
 }
 
 .message.assistant .bubble {
   background: #ffffff;
   color: #1e293b;
-  border-bottom-left-radius: 6px;
-  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 4px;
+  border: 1px solid #e5e7eb;
+  margin-right: auto;
 }
 
 .message-text {
@@ -697,24 +733,28 @@ onMounted(async () => {
 }
 
 .input-bar {
-  padding: 20px;
+  padding: 24px;
   background: #ffffff;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #e5e7eb;
+  position: sticky;
+  bottom: 0;
+  backdrop-filter: blur(8px);
 }
 
 .input-container {
   display: flex;
   gap: 12px;
   align-items: flex-end;
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
+  position: relative;
 }
 
 .message-input {
   flex: 1;
   padding: 16px 20px;
-  border: 2px solid #e2e8f0;
-  border-radius: 25px;
+  border: 2px solid #e5e7eb;
+  border-radius: 24px;
   resize: none;
   height: 52px;
   max-height: 120px;
@@ -725,17 +765,19 @@ onMounted(async () => {
   background: #ffffff;
   transition: all 0.3s ease;
   color: #1e293b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .message-input:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1), 0 4px 6px rgba(0, 0, 0, 0.1);
   background: #ffffff;
 }
 
 .message-input::placeholder {
   color: #9ca3af;
+  font-weight: 400;
 }
 
 .send-btn {
@@ -750,12 +792,34 @@ onMounted(async () => {
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.send-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
 }
 
 .send-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.send-btn:hover:not(:disabled)::before {
+  left: 100%;
 }
 
 .send-btn:disabled {
@@ -771,16 +835,59 @@ onMounted(async () => {
   justify-content: center;
 }
 
+/* Typing and streaming indicators */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
 .typing-text {
-  font-size: 13px;
+  font-size: 14px;
   opacity: 0.8;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.streaming-content {
+  position: relative;
+}
+
+.streaming-content::after {
+  content: "▊";
+  color: #3b82f6;
+  animation: blink 1s infinite;
+  font-weight: 100;
+  margin-left: 2px;
+}
+
+.streaming-indicator {
+  font-size: 12px;
+  color: #6b7280;
   font-style: italic;
 }
 
-.cursor {
-  animation: blink 1s infinite;
-  font-weight: 100;
+.streaming-dots {
+  animation: dots 1.5s infinite;
   color: #3b82f6;
+}
+
+@keyframes dots {
+  0%,
+  20% {
+    content: "";
+  }
+  40% {
+    content: ".";
+  }
+  60% {
+    content: "..";
+  }
+  80%,
+  100% {
+    content: "...";
+  }
 }
 
 @keyframes blink {
@@ -792,6 +899,11 @@ onMounted(async () => {
   100% {
     opacity: 0;
   }
+}
+
+.user-message {
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .history-loading {

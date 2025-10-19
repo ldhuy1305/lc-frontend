@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from "axios";
 import { API_CONFIG } from "~/config/api";
+import { useTokenManager } from "~/composables/useTokenManager";
 
 export type Conversation = {
   id: string;
@@ -9,6 +10,7 @@ export type Conversation = {
 
 class ChatRepository {
   private client: AxiosInstance;
+  private tokenManager = useTokenManager();
 
   constructor() {
     const client = axios.create({
@@ -117,9 +119,10 @@ class ChatRepository {
     let isStreaming = true;
 
     try {
-      const token = localStorage.getItem("access_token");
+      // Get fresh token with refresh logic
+      const token = await this.getValidToken();
       if (!token) {
-        throw new Error("No access token found");
+        throw new Error("No valid access token found");
       }
 
       const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CHAT}/stream`;
@@ -134,6 +137,39 @@ class ChatRepository {
       });
 
       if (!response.ok) {
+        // Handle 401 with refresh token logic
+        if (response.status === 401) {
+          try {
+            const newToken = await this.tokenManager.forceRefresh();
+            if (newToken) {
+              // Retry with new token
+              const retryResponse = await fetch(url, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${newToken}`,
+                },
+                body: JSON.stringify(payload),
+              });
+
+              if (retryResponse.ok) {
+                // Continue with retry response
+                return this.handleStreamResponse(
+                  retryResponse,
+                  onChunk,
+                  onSessionInfo,
+                  onComplete,
+                  onError
+                );
+              }
+            }
+          } catch (refreshError) {
+            console.error("Token refresh failed:", refreshError);
+            this.clearTokens();
+            throw new Error("Authentication failed. Please login again.");
+          }
+        }
+
         const errorText = await response.text();
         let errorMessage = `HTTP error! status: ${response.status}`;
 
@@ -147,6 +183,46 @@ class ChatRepository {
         throw new Error(errorMessage);
       }
 
+      // Handle successful response
+      return this.handleStreamResponse(
+        response,
+        onChunk,
+        onSessionInfo,
+        onComplete,
+        onError
+      );
+    } catch (error) {
+      console.error("Streaming error:", error);
+      onError?.(error as Error);
+    }
+  }
+
+  // Helper method to get valid token using token manager
+  private async getValidToken(): Promise<string | null> {
+    return await this.tokenManager.getValidToken();
+  }
+
+  // Helper method to clear tokens using token manager
+  private clearTokens(): void {
+    this.tokenManager.clearTokens();
+  }
+
+  // Helper method to handle stream response
+  private async handleStreamResponse(
+    response: Response,
+    onChunk: (chunk: string) => void,
+    onSessionInfo?: (sessionInfo: {
+      session_id: string;
+      title: string;
+      created_at: string;
+    }) => void,
+    onComplete?: () => void,
+    onError?: (error: Error) => void
+  ) {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    let isStreaming = true;
+
+    try {
       const bodyReader = response.body?.getReader();
       if (!bodyReader) {
         throw new Error("No response body reader available");
@@ -204,10 +280,13 @@ class ChatRepository {
                     continue; // Không gọi onChunk cho chunk session info
                   }
 
-                  if (parsed.content) {
-                    onChunk(parsed.content);
+                  if (parsed.content !== undefined) {
+                    // Handle both string and number content
+                    onChunk(String(parsed.content));
                   } else if (typeof parsed === "string") {
                     onChunk(parsed);
+                  } else if (typeof parsed === "number") {
+                    onChunk(String(parsed));
                   }
                 } catch (parseError) {
                   // If not JSON, treat as plain text

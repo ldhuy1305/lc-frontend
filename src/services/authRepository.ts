@@ -177,6 +177,73 @@ export class AuthRepository extends BaseRepository<any, any> {
     return response.data;
   }
 
+  // Enhanced refresh token method with better error handling
+  async refreshTokenWithRetry(): Promise<{
+    access_token: string;
+    refresh_token?: string;
+  } | null> {
+    try {
+      const refreshToken = localStorage.getItem("refresh_token");
+      if (!refreshToken) {
+        console.warn("No refresh token available");
+        return null;
+      }
+
+      const response = await this.client.post(
+        `${API_CONFIG.ENDPOINTS.AUTH}/refresh`,
+        { refresh_token: refreshToken }
+      );
+
+      const { access_token, refresh_token: newRefreshToken } =
+        response.data?.data || {};
+
+      if (!access_token) {
+        throw new Error("No access token in response");
+      }
+
+      // Update tokens in localStorage
+      localStorage.setItem("access_token", access_token);
+      if (newRefreshToken) {
+        localStorage.setItem("refresh_token", newRefreshToken);
+      }
+
+      return { access_token, refresh_token: newRefreshToken };
+    } catch (error) {
+      console.error("Token refresh failed:", error);
+      // Clear invalid tokens
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      return null;
+    }
+  }
+
+  // Check if token is expired
+  isTokenExpired(token?: string): boolean {
+    const tokenToCheck = token || localStorage.getItem("access_token");
+    if (!tokenToCheck) return true;
+
+    try {
+      const payload = JSON.parse(atob(tokenToCheck.split(".")[1]));
+      const now = Math.floor(Date.now() / 1000);
+      return payload.exp && payload.exp < now;
+    } catch {
+      return true;
+    }
+  }
+
+  // Get valid token (refresh if needed)
+  async getValidToken(): Promise<string | null> {
+    const token = localStorage.getItem("access_token");
+    if (!token) return null;
+
+    if (this.isTokenExpired(token)) {
+      const refreshResult = await this.refreshTokenWithRetry();
+      return refreshResult?.access_token || null;
+    }
+
+    return token;
+  }
+
   async me() {
     const response = await this.client.get(`${API_CONFIG.ENDPOINTS.ME}`);
     return response.data;

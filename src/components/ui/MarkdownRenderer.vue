@@ -3,158 +3,197 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from "vue";
+import { computed, ref, watch, onBeforeUnmount, nextTick } from "vue";
 
 interface Props {
-  content: string;
+  content: string | number;
+  isStreaming?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  isStreaming: false,
+});
 
-// Batching optimization
-let batchTimer: NodeJS.Timeout | null = null;
-const BATCH_DELAY = 50; // 50ms batching delay
+// Enhanced markdown parser with better streaming support
+const parseMarkdown = (text: string | number): string => {
+  if (!text && text !== 0) return "";
 
-// Code block detection
-const isInCodeBlock = ref(false);
-const codeBlockStart = ref(-1);
+  // Convert to string if it's a number
+  let html = String(text);
 
-// Enhanced markdown parser with code block handling
-const parseMarkdown = (text: string): string => {
-  let html = text;
+  // Handle code blocks with language detection
+  html = html.replace(/```(\w+)?\n?([\s\S]*?)```/g, (match, language, code) => {
+    const lang = language || "text";
+    return `<div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-language">${lang}</span>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(\`${code.trim()}\`)">Copy</button>
+        </div>
+        <pre class="code-block"><code class="language-${lang}">${escapeHtml(
+      code.trim()
+    )}</code></pre>
+      </div>`;
+  });
 
-  // Check if we're in a code block
-  const codeBlockMatches = text.match(/```/g);
-  const codeBlockCount = codeBlockMatches ? codeBlockMatches.length : 0;
+  // Handle inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
-  // Update code block state
-  if (codeBlockCount % 2 === 1 && !isInCodeBlock.value) {
-    // Starting a code block
-    isInCodeBlock.value = true;
-    codeBlockStart.value = text.lastIndexOf("```");
-  } else if (codeBlockCount % 2 === 0 && isInCodeBlock.value) {
-    // Ending a code block
-    isInCodeBlock.value = false;
-    codeBlockStart.value = -1;
-  }
+  // Headers with better styling
+  html = html.replace(/^### (.*$)/gim, '<h3 class="heading-3">$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2 class="heading-2">$1</h2>');
+  html = html.replace(/^# (.*$)/gim, '<h1 class="heading-1">$1</h1>');
 
-  // If we're in a code block, handle it specially
-  if (isInCodeBlock.value) {
-    const beforeCodeBlock = text.substring(0, codeBlockStart.value);
-    const codeBlockContent = text.substring(codeBlockStart.value);
-
-    // Parse the part before code block normally
-    const parsedBefore = parseMarkdownContent(beforeCodeBlock);
-
-    // Keep code block content as raw text
-    const escapedCodeBlock = codeBlockContent
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-
-    return parsedBefore + escapedCodeBlock;
-  }
-
-  // Normal parsing for non-code-block content
-  return parseMarkdownContent(text);
-};
-
-// Core markdown parsing logic
-const parseMarkdownContent = (text: string): string => {
-  let html = text;
-
-  // Headers
-  html = html.replace(/^### (.*$)/gim, '<h3 class="md-h3">$1</h3>');
-  html = html.replace(/^## (.*$)/gim, '<h2 class="md-h2">$1</h2>');
-  html = html.replace(/^# (.*$)/gim, '<h1 class="md-h1">$1</h1>');
-
-  // Bold and Italic
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="md-bold">$1</strong>');
-  html = html.replace(/\*(.*?)\*/g, '<em class="md-italic">$1</em>');
-
-  // Lists
-  html = html.replace(/^- (.*$)/gim, '<li class="md-list-item">$1</li>');
+  // Bold and Italic with better handling
   html = html.replace(
-    /(<li class="md-list-item">.*<\/li>)/s,
-    '<ul class="md-list">$1</ul>'
+    /\*\*(.*?)\*\*/g,
+    '<strong class="text-bold">$1</strong>'
   );
+  html = html.replace(/\*(.*?)\*/g, '<em class="text-italic">$1</em>');
+
+  // Lists with better structure
+  html = html.replace(/^- (.*$)/gim, '<li class="list-item">$1</li>');
   html = html.replace(
-    /^(\d+)\. (.*$)/gim,
-    '<li class="md-ordered-item">$2</li>'
+    /(<li class="list-item">.*<\/li>)/s,
+    '<ul class="unordered-list">$1</ul>'
   );
+  html = html.replace(/^(\d+)\. (.*$)/gim, '<li class="ordered-item">$2</li>');
   html = html.replace(
-    /(<li class="md-ordered-item">.*<\/li>)/s,
-    '<ol class="md-ordered-list">$1</ol>'
+    /(<li class="ordered-item">.*<\/li>)/s,
+    '<ol class="ordered-list">$1</ol>'
   );
 
-  // Code blocks (only when not in streaming code block)
+  // Tables
   html = html.replace(
-    /```([\s\S]*?)```/g,
-    '<pre class="md-code-block"><code>$1</code></pre>'
-  );
-  html = html.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+    /\|(.+)\|\n\|[-\s|:]+\|\n((?:\|.+\|\n?)*)/g,
+    (match, header, rows) => {
+      const headerCells = header
+        .split("|")
+        .map((cell: string) => cell.trim())
+        .filter((cell: string) => cell);
+      const rowLines = rows
+        .trim()
+        .split("\n")
+        .filter((line: string) => line.trim());
 
-  // Links
+      let tableHtml =
+        '<div class="table-wrapper"><table class="data-table"><thead><tr>';
+      headerCells.forEach((cell: string) => {
+        tableHtml += `<th>${cell}</th>`;
+      });
+      tableHtml += "</tr></thead><tbody>";
+
+      rowLines.forEach((line: string) => {
+        const cells = line
+          .split("|")
+          .map((cell: string) => cell.trim())
+          .filter((cell: string) => cell);
+        if (cells.length > 0) {
+          tableHtml += "<tr>";
+          cells.forEach((cell: string) => {
+            tableHtml += `<td>${cell}</td>`;
+          });
+          tableHtml += "</tr>";
+        }
+      });
+
+      tableHtml += "</tbody></table></div>";
+      return tableHtml;
+    }
+  );
+
+  // Links with better styling
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" class="md-link" target="_blank" rel="noopener noreferrer">$1</a>'
+    '<a href="$2" class="external-link" target="_blank" rel="noopener noreferrer">$1</a>'
   );
 
-  // Line breaks
-  html = html.replace(/\n/g, '<br class="md-break">');
+  // Blockquotes
+  html = html.replace(
+    /^> (.*$)/gim,
+    '<blockquote class="quote-block">$1</blockquote>'
+  );
+
+  // Horizontal rules
+  html = html.replace(/^---$/gim, '<hr class="divider">');
+
+  // Line breaks with better handling
+  html = html.replace(/\n\n/g, '</p><p class="paragraph">');
+  html = html.replace(/\n/g, '<br class="line-break">');
+
+  // Wrap in paragraph if not already wrapped
+  if (!html.startsWith("<")) {
+    html = `<p class="paragraph">${html}</p>`;
+  }
 
   return html;
 };
 
-// Buffer system for continuous re-parsing
-const contentBuffer = ref(props.content);
-const renderedContent = ref(parseMarkdown(props.content));
-
-// Continuous re-parsing with batching
-const updateRenderedContent = () => {
-  renderedContent.value = parseMarkdown(contentBuffer.value);
+// Escape HTML for code blocks
+const escapeHtml = (text: string): string => {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 };
 
-// Batching function for performance optimization
-const scheduleUpdate = () => {
-  if (batchTimer) {
-    clearTimeout(batchTimer);
+// Optimized rendering with streaming support
+const renderedContent = ref(parseMarkdown(props.content));
+let renderTimer: NodeJS.Timeout | null = null;
+let lastRenderTime = 0;
+const RENDER_THROTTLE = 16; // 60fps
+
+// Throttled rendering for streaming
+const scheduleRender = () => {
+  if (renderTimer) {
+    clearTimeout(renderTimer);
   }
 
-  batchTimer = setTimeout(() => {
-    updateRenderedContent();
-    batchTimer = null;
-  }, BATCH_DELAY);
+  const now = Date.now();
+  const timeSinceLastRender = now - lastRenderTime;
+
+  if (timeSinceLastRender >= RENDER_THROTTLE) {
+    // Render immediately if enough time has passed
+    renderedContent.value = parseMarkdown(props.content);
+    lastRenderTime = now;
+    renderTimer = null;
+  } else {
+    // Schedule render for next frame
+    renderTimer = setTimeout(() => {
+      renderedContent.value = parseMarkdown(props.content);
+      lastRenderTime = Date.now();
+      renderTimer = null;
+    }, RENDER_THROTTLE - timeSinceLastRender);
+  }
 };
 
-// Watch for content changes and implement continuous re-parsing
+// Watch content changes with optimized streaming
 watch(
   () => props.content,
   (newContent, oldContent) => {
-    // Update buffer immediately
-    contentBuffer.value = newContent;
+    // Convert to string for comparison
+    const newContentStr = String(newContent);
+    const oldContentStr = String(oldContent || "");
 
-    // Check if this is streaming (content is being appended)
-    const isStreaming = oldContent && newContent.startsWith(oldContent);
-
-    if (isStreaming) {
-      // Use batching for streaming to improve performance
-      scheduleUpdate();
+    if (
+      props.isStreaming &&
+      oldContent &&
+      newContentStr.startsWith(oldContentStr)
+    ) {
+      // Streaming update - use throttled rendering
+      scheduleRender();
     } else {
-      // For completely new content, update immediately
-      if (batchTimer) {
-        clearTimeout(batchTimer);
-        batchTimer = null;
+      // Complete content change - render immediately
+      if (renderTimer) {
+        clearTimeout(renderTimer);
+        renderTimer = null;
       }
-      updateRenderedContent();
-
-      // Reset code block state for new content
-      isInCodeBlock.value = false;
-      codeBlockStart.value = -1;
+      renderedContent.value = parseMarkdown(newContent);
+      lastRenderTime = Date.now();
     }
-  }
+  },
+  { immediate: true }
 );
 
 // Computed property for template
@@ -162,138 +201,345 @@ const renderedMarkdown = computed(() => {
   return renderedContent.value;
 });
 
-// Cleanup timers on unmount
+// Cleanup
 onBeforeUnmount(() => {
-  if (batchTimer) {
-    clearTimeout(batchTimer);
+  if (renderTimer) {
+    clearTimeout(renderTimer);
   }
 });
 </script>
 
 <style scoped>
 .markdown-content {
-  line-height: 1.6;
-  color: inherit;
+  line-height: 1.7;
+  color: #1f2937;
+  font-size: 15px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
-.markdown-content :deep(.md-h1) {
-  font-size: 1.5rem;
+/* Typography */
+.markdown-content :deep(.paragraph) {
+  margin: 0 0 16px 0;
+  line-height: 1.7;
+}
+
+.markdown-content :deep(.heading-1) {
+  font-size: 1.75rem;
   font-weight: 700;
-  margin: 1rem 0 0.5rem 0;
-  color: #1e293b;
+  margin: 24px 0 16px 0;
+  color: #111827;
+  line-height: 1.3;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 8px;
 }
 
-.markdown-content :deep(.md-h2) {
+.markdown-content :deep(.heading-2) {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 20px 0 12px 0;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.markdown-content :deep(.heading-3) {
   font-size: 1.25rem;
   font-weight: 600;
-  margin: 0.875rem 0 0.5rem 0;
-  color: #1e293b;
+  margin: 16px 0 8px 0;
+  color: #111827;
+  line-height: 1.4;
 }
 
-.markdown-content :deep(.md-h3) {
-  font-size: 1.125rem;
+.markdown-content :deep(.text-bold) {
   font-weight: 600;
-  margin: 0.75rem 0 0.5rem 0;
-  color: #1e293b;
+  color: #111827;
 }
 
-.markdown-content :deep(.md-bold) {
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.markdown-content :deep(.md-italic) {
+.markdown-content :deep(.text-italic) {
   font-style: italic;
-  color: #64748b;
+  color: #6b7280;
 }
 
-.markdown-content :deep(.md-list) {
-  margin: 0.5rem 0;
-  padding-left: 1.5rem;
+/* Lists */
+.markdown-content :deep(.unordered-list),
+.markdown-content :deep(.ordered-list) {
+  margin: 16px 0;
+  padding-left: 24px;
 }
 
-.markdown-content :deep(.md-ordered-list) {
-  margin: 0.5rem 0;
-  padding-left: 1.5rem;
+.markdown-content :deep(.list-item),
+.markdown-content :deep(.ordered-item) {
+  margin: 8px 0;
+  line-height: 1.6;
 }
 
-.markdown-content :deep(.md-list-item),
-.markdown-content :deep(.md-ordered-item) {
-  margin: 0.25rem 0;
+.markdown-content :deep(.list-item) {
   list-style-type: disc;
 }
 
-.markdown-content :deep(.md-ordered-item) {
+.markdown-content :deep(.ordered-item) {
   list-style-type: decimal;
 }
 
-.markdown-content :deep(.md-code-block) {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 0.75rem 0;
+/* Code blocks */
+.markdown-content :deep(.code-block-wrapper) {
+  margin: 16px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.markdown-content :deep(.code-block-header) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.markdown-content :deep(.code-language) {
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.markdown-content :deep(.copy-btn) {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.markdown-content :deep(.copy-btn:hover) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.markdown-content :deep(.code-block) {
+  background: #f8fafc;
+  padding: 16px;
+  margin: 0;
   overflow-x: auto;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
 }
 
-.markdown-content :deep(.md-code-block code) {
-  font-family: "Courier New", monospace;
-  font-size: 0.875rem;
-  color: #1e293b;
+.markdown-content :deep(.code-block code) {
   background: transparent;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
 }
 
-.markdown-content :deep(.md-inline-code) {
+.markdown-content :deep(.inline-code) {
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  padding: 0.125rem 0.375rem;
-  font-family: "Courier New", monospace;
-  font-size: 0.875rem;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", monospace;
+  font-size: 13px;
   color: #dc2626;
+  font-weight: 500;
 }
 
-.markdown-content :deep(.md-link) {
+/* Tables */
+.markdown-content :deep(.table-wrapper) {
+  margin: 16px 0;
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-content :deep(.data-table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.markdown-content :deep(.data-table th) {
+  background: #f8fafc;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.markdown-content :deep(.data-table td) {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #1f2937;
+}
+
+.markdown-content :deep(.data-table tr:last-child td) {
+  border-bottom: none;
+}
+
+/* Links */
+.markdown-content :deep(.external-link) {
   color: #3b82f6;
-  text-decoration: underline;
-  transition: color 0.2s ease;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
 }
 
-.markdown-content :deep(.md-link:hover) {
-  color: #1e40af;
+.markdown-content :deep(.external-link:hover) {
+  color: #1d4ed8;
+  border-bottom-color: #3b82f6;
 }
 
-.markdown-content :deep(.md-break) {
+/* Blockquotes */
+.markdown-content :deep(.quote-block) {
+  margin: 16px 0;
+  padding: 16px 20px;
+  background: #f8fafc;
+  border-left: 4px solid #3b82f6;
+  border-radius: 0 8px 8px 0;
+  color: #4b5563;
+  font-style: italic;
+}
+
+/* Dividers */
+.markdown-content :deep(.divider) {
+  border: none;
+  height: 1px;
+  background: #e5e7eb;
+  margin: 24px 0;
+}
+
+/* Line breaks */
+.markdown-content :deep(.line-break) {
   display: block;
-  margin: 0.25rem 0;
+  margin: 4px 0;
+}
+
+/* Streaming cursor animation */
+.markdown-content.streaming::after {
+  content: "▊";
+  color: #3b82f6;
+  animation: blink 1s infinite;
+  font-weight: 100;
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  .markdown-content :deep(.md-h1),
-  .markdown-content :deep(.md-h2),
-  .markdown-content :deep(.md-h3),
-  .markdown-content :deep(.md-bold) {
-    color: #f8fafc;
+  .markdown-content {
+    color: #f9fafb;
   }
 
-  .markdown-content :deep(.md-italic) {
-    color: #94a3b8;
+  .markdown-content :deep(.heading-1),
+  .markdown-content :deep(.heading-2),
+  .markdown-content :deep(.heading-3),
+  .markdown-content :deep(.text-bold) {
+    color: #f9fafb;
   }
 
-  .markdown-content :deep(.md-code-block) {
-    background: #1e293b;
-    border-color: #334155;
+  .markdown-content :deep(.text-italic) {
+    color: #9ca3af;
   }
 
-  .markdown-content :deep(.md-code-block code) {
-    color: #f8fafc;
+  .markdown-content :deep(.code-block-wrapper) {
+    border-color: #374151;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
   }
 
-  .markdown-content :deep(.md-inline-code) {
-    background: #1e293b;
-    border-color: #334155;
+  .markdown-content :deep(.code-block-header) {
+    background: #1f2937;
+    border-bottom-color: #374151;
+  }
+
+  .markdown-content :deep(.code-language) {
+    color: #9ca3af;
+  }
+
+  .markdown-content :deep(.code-block) {
+    background: #1f2937;
+    color: #f9fafb;
+  }
+
+  .markdown-content :deep(.inline-code) {
+    background: #1f2937;
+    border-color: #374151;
     color: #fca5a5;
+  }
+
+  .markdown-content :deep(.table-wrapper) {
+    border-color: #374151;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .markdown-content :deep(.data-table th) {
+    background: #1f2937;
+    color: #d1d5db;
+    border-bottom-color: #374151;
+  }
+
+  .markdown-content :deep(.data-table td) {
+    color: #f9fafb;
+    border-bottom-color: #374151;
+  }
+
+  .markdown-content :deep(.quote-block) {
+    background: #1f2937;
+    color: #d1d5db;
+  }
+
+  .markdown-content :deep(.divider) {
+    background: #374151;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .markdown-content {
+    font-size: 14px;
+  }
+
+  .markdown-content :deep(.heading-1) {
+    font-size: 1.5rem;
+  }
+
+  .markdown-content :deep(.heading-2) {
+    font-size: 1.25rem;
+  }
+
+  .markdown-content :deep(.heading-3) {
+    font-size: 1.125rem;
+  }
+
+  .markdown-content :deep(.code-block) {
+    font-size: 13px;
+    padding: 12px;
+  }
+
+  .markdown-content :deep(.data-table th),
+  .markdown-content :deep(.data-table td) {
+    padding: 8px 12px;
+    font-size: 13px;
   }
 }
 </style>
