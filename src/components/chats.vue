@@ -650,6 +650,7 @@ onMounted(async () => {
 .message.user .bubble {
   background: linear-gradient(135deg, #3b82f6, #1e40af);
   color: white;
+  -webkit-text-fill-color: #ffffff;
   border-bottom-right-radius: 4px;
   margin-left: auto;
 }
@@ -657,6 +658,7 @@ onMounted(async () => {
 .message.assistant .bubble {
   background: #ffffff;
   color: #1e293b;
+  -webkit-text-fill-color: #1e293b;
   border-bottom-left-radius: 4px;
   border: 1px solid #e5e7eb;
   margin-right: auto;
@@ -666,6 +668,8 @@ onMounted(async () => {
   line-height: 1.6;
   font-size: 15px;
   margin-bottom: 8px;
+  color: inherit;
+  -webkit-text-fill-color: currentColor; /* inherit into nested elements */
 }
 
 .message-time {
@@ -934,6 +938,8 @@ onMounted(async () => {
 .messages::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
 }
+
+/* removed theme overrides */
 
 /* Responsive design */
 @media (max-width: 768px) {

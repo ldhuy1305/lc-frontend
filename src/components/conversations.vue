@@ -670,6 +670,8 @@ onMounted(() => {
   background: #94a3b8;
 }
 
+/* removed manual data-theme dark overrides */
+
 /* Responsive design */
 @media (max-width: 768px) {
   .conversations {

@@ -212,7 +212,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .markdown-content {
   line-height: 1.7;
-  color: #1f2937;
+  color: inherit; /* inherit from parent bubble to avoid mobile theme overrides */
+  -webkit-text-fill-color: currentColor; /* iOS/Safari: respect current text color */
   font-size: 15px;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -445,73 +446,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .markdown-content {
-    color: #f9fafb;
-  }
-
-  .markdown-content :deep(.heading-1),
-  .markdown-content :deep(.heading-2),
-  .markdown-content :deep(.heading-3),
-  .markdown-content :deep(.text-bold) {
-    color: #f9fafb;
-  }
-
-  .markdown-content :deep(.text-italic) {
-    color: #9ca3af;
-  }
-
-  .markdown-content :deep(.code-block-wrapper) {
-    border-color: #374151;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-  }
-
-  .markdown-content :deep(.code-block-header) {
-    background: #1f2937;
-    border-bottom-color: #374151;
-  }
-
-  .markdown-content :deep(.code-language) {
-    color: #9ca3af;
-  }
-
-  .markdown-content :deep(.code-block) {
-    background: #1f2937;
-    color: #f9fafb;
-  }
-
-  .markdown-content :deep(.inline-code) {
-    background: #1f2937;
-    border-color: #374151;
-    color: #fca5a5;
-  }
-
-  .markdown-content :deep(.table-wrapper) {
-    border-color: #374151;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  }
-
-  .markdown-content :deep(.data-table th) {
-    background: #1f2937;
-    color: #d1d5db;
-    border-bottom-color: #374151;
-  }
-
-  .markdown-content :deep(.data-table td) {
-    color: #f9fafb;
-    border-bottom-color: #374151;
-  }
-
-  .markdown-content :deep(.quote-block) {
-    background: #1f2937;
-    color: #d1d5db;
-  }
-
-  .markdown-content :deep(.divider) {
-    background: #374151;
-  }
-}
+/* removed dark mode media overrides */
 
 /* Responsive design */
 @media (max-width: 768px) {
