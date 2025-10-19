@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch, onBeforeUnmount } from "vue";
 
 interface Props {
   content: string;
@@ -11,8 +11,58 @@ interface Props {
 
 const props = defineProps<Props>();
 
-// Simple markdown parser for basic formatting
+// Batching optimization
+let batchTimer: NodeJS.Timeout | null = null;
+const BATCH_DELAY = 50; // 50ms batching delay
+
+// Code block detection
+const isInCodeBlock = ref(false);
+const codeBlockStart = ref(-1);
+
+// Enhanced markdown parser with code block handling
 const parseMarkdown = (text: string): string => {
+  let html = text;
+
+  // Check if we're in a code block
+  const codeBlockMatches = text.match(/```/g);
+  const codeBlockCount = codeBlockMatches ? codeBlockMatches.length : 0;
+
+  // Update code block state
+  if (codeBlockCount % 2 === 1 && !isInCodeBlock.value) {
+    // Starting a code block
+    isInCodeBlock.value = true;
+    codeBlockStart.value = text.lastIndexOf("```");
+  } else if (codeBlockCount % 2 === 0 && isInCodeBlock.value) {
+    // Ending a code block
+    isInCodeBlock.value = false;
+    codeBlockStart.value = -1;
+  }
+
+  // If we're in a code block, handle it specially
+  if (isInCodeBlock.value) {
+    const beforeCodeBlock = text.substring(0, codeBlockStart.value);
+    const codeBlockContent = text.substring(codeBlockStart.value);
+
+    // Parse the part before code block normally
+    const parsedBefore = parseMarkdownContent(beforeCodeBlock);
+
+    // Keep code block content as raw text
+    const escapedCodeBlock = codeBlockContent
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+    return parsedBefore + escapedCodeBlock;
+  }
+
+  // Normal parsing for non-code-block content
+  return parseMarkdownContent(text);
+};
+
+// Core markdown parsing logic
+const parseMarkdownContent = (text: string): string => {
   let html = text;
 
   // Headers
@@ -39,7 +89,7 @@ const parseMarkdown = (text: string): string => {
     '<ol class="md-ordered-list">$1</ol>'
   );
 
-  // Code blocks
+  // Code blocks (only when not in streaming code block)
   html = html.replace(
     /```([\s\S]*?)```/g,
     '<pre class="md-code-block"><code>$1</code></pre>'
@@ -58,8 +108,65 @@ const parseMarkdown = (text: string): string => {
   return html;
 };
 
+// Buffer system for continuous re-parsing
+const contentBuffer = ref(props.content);
+const renderedContent = ref(parseMarkdown(props.content));
+
+// Continuous re-parsing with batching
+const updateRenderedContent = () => {
+  renderedContent.value = parseMarkdown(contentBuffer.value);
+};
+
+// Batching function for performance optimization
+const scheduleUpdate = () => {
+  if (batchTimer) {
+    clearTimeout(batchTimer);
+  }
+
+  batchTimer = setTimeout(() => {
+    updateRenderedContent();
+    batchTimer = null;
+  }, BATCH_DELAY);
+};
+
+// Watch for content changes and implement continuous re-parsing
+watch(
+  () => props.content,
+  (newContent, oldContent) => {
+    // Update buffer immediately
+    contentBuffer.value = newContent;
+
+    // Check if this is streaming (content is being appended)
+    const isStreaming = oldContent && newContent.startsWith(oldContent);
+
+    if (isStreaming) {
+      // Use batching for streaming to improve performance
+      scheduleUpdate();
+    } else {
+      // For completely new content, update immediately
+      if (batchTimer) {
+        clearTimeout(batchTimer);
+        batchTimer = null;
+      }
+      updateRenderedContent();
+
+      // Reset code block state for new content
+      isInCodeBlock.value = false;
+      codeBlockStart.value = -1;
+    }
+  }
+);
+
+// Computed property for template
 const renderedMarkdown = computed(() => {
-  return parseMarkdown(props.content);
+  return renderedContent.value;
+});
+
+// Cleanup timers on unmount
+onBeforeUnmount(() => {
+  if (batchTimer) {
+    clearTimeout(batchTimer);
+  }
 });
 </script>
 

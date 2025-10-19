@@ -113,8 +113,15 @@ class ChatRepository {
     onComplete?: () => void,
     onError?: (error: Error) => void
   ) {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    let isStreaming = true;
+
     try {
       const token = localStorage.getItem("access_token");
+      if (!token) {
+        throw new Error("No access token found");
+      }
+
       const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.CHAT}/stream`;
 
       const response = await fetch(url, {
@@ -127,83 +134,118 @@ class ChatRepository {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        let errorMessage = `HTTP error! status: ${response.status}`;
+
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          // Use default error message if parsing fails
+        }
+
+        throw new Error(errorMessage);
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
+      const bodyReader = response.body?.getReader();
+      if (!bodyReader) {
         throw new Error("No response body reader available");
       }
+      reader = bodyReader;
 
       const decoder = new TextDecoder();
       let buffer = "";
       let isFirstChunk = true;
+      let chunkCount = 0;
+      const maxChunks = 10000; // Prevent infinite loops
 
-      while (true) {
-        const { done, value } = await reader.read();
+      while (isStreaming && chunkCount < maxChunks) {
+        try {
+          const { done, value } = await reader.read();
 
-        if (done) {
-          onComplete?.();
-          break;
-        }
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (line.trim() === "") continue;
-
-          try {
-            // Handle Server-Sent Events format
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6);
-              if (data === "[DONE]") {
-                onComplete?.();
-                return;
-              }
-
-              try {
-                const parsed = JSON.parse(data);
-
-                // Kiểm tra chunk đầu tiên chứa session info
-                if (
-                  isFirstChunk &&
-                  parsed.session_id &&
-                  parsed.title &&
-                  parsed.created_at
-                ) {
-                  onSessionInfo?.({
-                    session_id: parsed.session_id,
-                    title: parsed.title,
-                    created_at: parsed.created_at,
-                  });
-                  isFirstChunk = false;
-                  continue; // Không gọi onChunk cho chunk session info
-                }
-
-                if (parsed.content) {
-                  onChunk(parsed.content);
-                } else if (typeof parsed === "string") {
-                  onChunk(parsed);
-                }
-              } catch {
-                // If not JSON, treat as plain text
-                onChunk(data);
-              }
-            } else {
-              // Handle plain text streaming
-              onChunk(line);
-            }
-
-            isFirstChunk = false;
-          } catch (parseError) {
-            console.warn("Failed to parse chunk:", line, parseError);
+          if (done) {
+            onComplete?.();
+            break;
           }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.trim() === "") continue;
+
+            try {
+              // Handle Server-Sent Events format
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6);
+                if (data === "[DONE]") {
+                  onComplete?.();
+                  isStreaming = false;
+                  return;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+
+                  // Kiểm tra chunk đầu tiên chứa session info
+                  if (
+                    isFirstChunk &&
+                    parsed.session_id &&
+                    parsed.title &&
+                    parsed.created_at
+                  ) {
+                    onSessionInfo?.({
+                      session_id: parsed.session_id,
+                      title: parsed.title,
+                      created_at: parsed.created_at,
+                    });
+                    isFirstChunk = false;
+                    continue; // Không gọi onChunk cho chunk session info
+                  }
+
+                  if (parsed.content) {
+                    onChunk(parsed.content);
+                  } else if (typeof parsed === "string") {
+                    onChunk(parsed);
+                  }
+                } catch (parseError) {
+                  // If not JSON, treat as plain text
+                  onChunk(data);
+                }
+              } else {
+                // Handle plain text streaming
+                onChunk(line);
+              }
+
+              isFirstChunk = false;
+              chunkCount++;
+            } catch (parseError) {
+              console.warn("Failed to parse chunk:", line, parseError);
+            }
+          }
+        } catch (readError) {
+          console.error("Error reading stream:", readError);
+          throw new Error(`Stream reading error: ${readError}`);
         }
       }
+
+      if (chunkCount >= maxChunks) {
+        throw new Error("Stream too long, possible infinite loop");
+      }
     } catch (error) {
+      console.error("Streaming error:", error);
       onError?.(error as Error);
+    } finally {
+      // Cleanup reader
+      if (reader) {
+        try {
+          await reader.cancel();
+        } catch (cancelError) {
+          console.warn("Error canceling reader:", cancelError);
+        }
+      }
+      isStreaming = false;
     }
   }
 }

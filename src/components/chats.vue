@@ -13,12 +13,7 @@
       </div>
       <div class="header-actions">
         <button class="logout-btn" @click="handleLogout">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.59L17 17L22 12L17 7ZM4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"
-              fill="currentColor"
-            />
-          </svg>
+          <LogoutIcon :size="16" />
           Đăng xuất
         </button>
       </div>
@@ -43,103 +38,10 @@
       >
         <div class="avatar">
           <div v-if="msg.role === 'user'" class="user-avatar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z"
-                fill="currentColor"
-              />
-            </svg>
+            <UserIcon :size="20" />
           </div>
           <div v-else class="assistant-avatar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <!-- Robot Head -->
-              <rect
-                x="6"
-                y="4"
-                width="12"
-                height="10"
-                rx="2"
-                fill="currentColor"
-                stroke="currentColor"
-                stroke-width="1.5"
-              />
-              <!-- Robot Antenna -->
-              <line
-                x1="12"
-                y1="4"
-                x2="12"
-                y2="2"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-              />
-              <circle cx="12" cy="2" r="1" fill="currentColor" />
-              <!-- Robot Eyes -->
-              <circle cx="9" cy="8" r="1.5" fill="#ffffff" />
-              <circle cx="15" cy="8" r="1.5" fill="#ffffff" />
-              <!-- Robot Eyes Pupils -->
-              <circle cx="9" cy="8" r="0.8" fill="currentColor" />
-              <circle cx="15" cy="8" r="0.8" fill="currentColor" />
-              <!-- Robot Mouth -->
-              <rect
-                x="10"
-                y="11"
-                width="4"
-                height="1.5"
-                rx="0.5"
-                fill="#ffffff"
-              />
-              <!-- Robot Body -->
-              <rect
-                x="7"
-                y="14"
-                width="10"
-                height="8"
-                rx="1"
-                fill="currentColor"
-                stroke="currentColor"
-                stroke-width="1.5"
-              />
-              <!-- Robot Control Panel -->
-              <rect x="9" y="16" width="2" height="1" rx="0.3" fill="#ffffff" />
-              <rect
-                x="12"
-                y="16"
-                width="2"
-                height="1"
-                rx="0.3"
-                fill="#ffffff"
-              />
-              <rect x="9" y="18" width="2" height="1" rx="0.3" fill="#ffffff" />
-              <rect
-                x="12"
-                y="18"
-                width="2"
-                height="1"
-                rx="0.3"
-                fill="#ffffff"
-              />
-              <!-- Robot Arms -->
-              <rect
-                x="4"
-                y="16"
-                width="3"
-                height="2"
-                rx="0.5"
-                fill="currentColor"
-              />
-              <rect
-                x="17"
-                y="16"
-                width="3"
-                height="2"
-                rx="0.5"
-                fill="currentColor"
-              />
-              <!-- Robot Hands -->
-              <circle cx="5.5" cy="18.5" r="0.8" fill="currentColor" />
-              <circle cx="18.5" cy="18.5" r="0.8" fill="currentColor" />
-            </svg>
+            <RobotIcon :size="20" />
           </div>
         </div>
         <div class="message-content">
@@ -151,11 +53,7 @@
               msg.text === ''
             "
           >
-            <div class="typing-indicator">
-              <span class="dot"></span>
-              <span class="dot"></span>
-              <span class="dot"></span>
-            </div>
+            <TypingDots />
             <div class="typing-text">AI đang suy nghĩ...</div>
           </div>
           <div
@@ -167,7 +65,10 @@
             "
           >
             <div class="message-text">
-              <MarkdownRenderer :content="msg.text" />
+              <MarkdownRenderer
+                :key="`streaming-${idx}-${msg.text.length}`"
+                :content="msg.text"
+              />
               <span class="cursor">|</span>
             </div>
             <div class="message-time">Đang nhập...</div>
@@ -176,6 +77,7 @@
             <div class="message-text">
               <MarkdownRenderer
                 v-if="msg.role === 'assistant'"
+                :key="`completed-${idx}`"
                 :content="msg.text"
               />
               <span v-else>{{ msg.text }}</span>
@@ -187,12 +89,7 @@
 
       <div v-if="!loadingHistory && messages.length === 0" class="empty">
         <div class="empty-icon">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM20 16H5.17L4 17.17V4H20V16Z"
-              fill="currentColor"
-            />
-          </svg>
+          <ChatIcon :size="64" />
         </div>
         <h3>Chào mừng bạn đến với AI Law Consultant!</h3>
         <p>
@@ -235,20 +132,9 @@
           :disabled="isWaitingForResponse || !draft.trim()"
           class="send-btn"
         >
-          <svg
-            v-if="!isWaitingForResponse"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <path
-              d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z"
-              fill="currentColor"
-            />
-          </svg>
+          <SendIcon v-if="!isWaitingForResponse" :size="20" />
           <div v-else class="send-loading">
-            <div class="loading-spinner"></div>
+            <LoadingSpinner :size="20" />
           </div>
         </button>
       </div>
@@ -262,6 +148,15 @@ import { authRepository } from "~/services/authRepository";
 import { chatRepository } from "~/services/chatRepository";
 import LoadingSkeleton from "~/components/ui/LoadingSkeleton.vue";
 import MarkdownRenderer from "~/components/ui/MarkdownRenderer.vue";
+import {
+  UserIcon,
+  RobotIcon,
+  LogoutIcon,
+  SendIcon,
+  ChatIcon,
+  LoadingSpinner,
+  TypingDots,
+} from "~/assets/icons";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
 
@@ -876,22 +771,6 @@ onMounted(async () => {
   justify-content: center;
 }
 
-.loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top: 2px solid white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.typing-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
 .typing-text {
   font-size: 13px;
   opacity: 0.8;
@@ -913,26 +792,6 @@ onMounted(async () => {
   100% {
     opacity: 0;
   }
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  background: #10b981;
-  border-radius: 50%;
-  animation: dotPulse 1.4s infinite ease-in-out both;
-}
-
-.dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-.dot:nth-child(3) {
-  animation-delay: 0s;
 }
 
 .history-loading {
@@ -959,28 +818,6 @@ onMounted(async () => {
 
 .messages::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
-}
-
-@keyframes dotPulse {
-  0%,
-  80%,
-  100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1.2);
-    opacity: 1;
-  }
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
 }
 
 /* Responsive design */
