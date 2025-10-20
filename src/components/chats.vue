@@ -91,7 +91,11 @@
               />
               <span v-else class="user-message">{{ msg.text }}</span>
             </div>
-            <div class="message-time">{{ formatTime(new Date()) }}</div>
+            <div class="message-time">
+              {{
+                formatTime(msg.timestamp ? new Date(msg.timestamp) : new Date())
+              }}
+            </div>
           </div>
         </div>
       </div>
@@ -167,7 +171,11 @@ import {
   TypingDots,
 } from "~/assets/icons";
 
-type ChatMessage = { role: "user" | "assistant"; text: string };
+type ChatMessage = {
+  role: "user" | "assistant";
+  text: string;
+  timestamp?: string;
+};
 
 const currentConversationId = ref<string>("");
 const messages = ref<ChatMessage[]>([]);
@@ -275,11 +283,19 @@ const loadHistoryIfAny = async () => {
   loadingHistory.value = true;
   try {
     const data = await chatRepository.detailConversations(cid);
-    const items: Array<{ role?: string; content?: string }> =
-      (data as any)?.items || (data as any)?.data?.items || [];
+    const items: Array<{
+      role?: string;
+      content?: string;
+      created_at?: string;
+      updated_at?: string;
+    }> = (data as any)?.items || (data as any)?.data?.items || [];
     messages.value = items.map((it) => ({
       role: it && it.role === "assistant" ? "assistant" : "user",
       text: it && it.content ? it.content : "",
+      timestamp:
+        it && (it.created_at || it.updated_at)
+          ? it.created_at || it.updated_at
+          : new Date().toISOString(),
     }));
     await scrollToBottom();
   } catch (e) {
@@ -302,7 +318,11 @@ const send = async () => {
   const text = draft.value.trim();
   if (!text || isWaitingForResponse.value) return;
 
-  messages.value.push({ role: "user", text });
+  messages.value.push({
+    role: "user",
+    text,
+    timestamp: new Date().toISOString(),
+  });
   draft.value = "";
 
   // Clear draft cho conversation hiện tại
@@ -317,7 +337,11 @@ const send = async () => {
   await scrollToBottom();
 
   // Add streaming message placeholder
-  messages.value.push({ role: "assistant", text: "" });
+  messages.value.push({
+    role: "assistant",
+    text: "",
+    timestamp: new Date().toISOString(),
+  });
   isWaitingForResponse.value = true;
   await scrollToBottom();
 
@@ -342,6 +366,10 @@ const send = async () => {
         const lastMessage = messages.value[messages.value.length - 1];
         if (lastMessage && lastMessage.role === "assistant") {
           lastMessage.text = streamingText;
+          // Cập nhật timestamp khi streaming hoàn thành
+          if (!lastMessage.timestamp) {
+            lastMessage.timestamp = new Date().toISOString();
+          }
           scrollToBottom();
         }
       },
