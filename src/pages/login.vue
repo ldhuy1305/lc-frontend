@@ -1,5 +1,5 @@
 <template>
-  <div class="login-background" style="background-image: url('/images/login_background.webp')">
+  <div class="login-background">
     <div class="login-page">
       <h2 class="page-title">Law Consultant</h2>
       <p class="page-subtitle">Chào mừng bạn quay trở lại!</p>
@@ -198,13 +198,12 @@ const handleLogin = async () => {
 
 <style scoped>
 .login-background {
-  /* background-image: url("/images/login_background.png"); Moved to inline style for webp support */
+  background-image: url("/images/login_background.png");
   background-size: cover;
   background-position: center;
   min-height: 100vh;
   display: flex;
   align-items: center;
-  justify-content: center;
   padding: 40px;
 }
 
