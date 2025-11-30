@@ -59,14 +59,14 @@ export default defineNuxtConfig({
         },
       ],
       link: [
-        {
-          rel: "stylesheet",
-          href: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css",
-        },
+        // {
+        //   rel: "stylesheet",
+        //   href: "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css",
+        // },
         {
           rel: "preload",
           as: "image",
-          href: "/images/login_background.png",
+          href: "/images/login_background.webp",
         },
         { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       ],
