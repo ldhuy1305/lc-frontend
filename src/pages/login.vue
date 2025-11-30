@@ -45,10 +45,13 @@
             :aria-label="showPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu'"
           >
             <v-icon
-              :icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
               size="20"
               color="grey"
-            ></v-icon>
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20">
+                <path :d="showPassword ? mdiEyeOff : mdiEye" fill="currentColor" />
+              </svg>
+            </v-icon>
           </button>
         </div>
       </div>
@@ -91,13 +94,12 @@
 </template>
 
 <script setup>
-import Header from "~/components/layout/Header";
-import Footer from "~/components/layout/Footer";
 import LoadingSpinner from "~/components/ui/LoadingSpinner.vue";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { getApiUrl, API_CONFIG } from "~/config/api";
 import { authRepository } from "~/services/authRepository";
+import { mdiEye, mdiEyeOff } from '@mdi/js';
 
 // Thiết lập tiêu đề trang
 useHead({
