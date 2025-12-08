@@ -42,7 +42,7 @@
         </svg>
         {{ loadingCreate ? "Đang tạo..." : "Cuộc trò chuyện mới" }}
       </button>
-      <button class="action disabled" disabled>
+      <button class="action" @click="isSearchOpen = true">
         <svg
           width="18"
           height="18"
@@ -58,7 +58,7 @@
             stroke-linejoin="round"
           />
         </svg>
-        Tìm kiếm trò chuyện (sắp ra mắt)
+        Tìm kiếm trò chuyện
       </button>
       <button class="action disabled" disabled>
         <svg
@@ -156,12 +156,20 @@
       </div>
     </div>
   </aside>
+
+  <SearchConversationModal
+    :is-open="isSearchOpen"
+    :conversations="conversations"
+    @close="isSearchOpen = false"
+    @select="handleSearchSelect"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { chatRepository } from "~/services/chatRepository";
 import LoadingSkeleton from "~/components/ui/LoadingSkeleton.vue";
+import SearchConversationModal from "~/components/SearchConversationModal.vue";
 
 const collapsed = ref(false);
 const conversations = ref([]);
@@ -170,6 +178,7 @@ const loadingCreate = ref(false);
 const loadingSearch = ref(false);
 const selectedConversationId = ref("");
 const typingIntervals = ref(new Map()); // Để quản lý các interval typing
+const isSearchOpen = ref(false);
 
 const toggle = () => {
   collapsed.value = !collapsed.value;
@@ -214,16 +223,16 @@ const handleNewConversation = async () => {
   }
 };
 
-const handleSearch = async () => {
-  loadingSearch.value = true;
-  try {
-    // If backend requires query, adjust to pass it in
-    await chatRepository.searchConversations();
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.debug("Search conversation failed", e);
-  } finally {
-    loadingSearch.value = false;
+const handleSearchSelect = (conv) => {
+  selectConversation(conv);
+  isSearchOpen.value = false;
+};
+
+// Keyboard shortcuts
+const handleKeydown = (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+    e.preventDefault();
+    isSearchOpen.value = true;
   }
 };
 
@@ -347,6 +356,7 @@ onMounted(() => {
 
   window.addEventListener("conversation:selected", handleConversationSelected);
   window.addEventListener("conversation:created", handleConversationCreated);
+  window.addEventListener("keydown", handleKeydown);
 
   // Cleanup
   onBeforeUnmount(() => {
@@ -358,6 +368,7 @@ onMounted(() => {
       "conversation:created",
       handleConversationCreated
     );
+    window.removeEventListener("keydown", handleKeydown);
 
     // Clear all typing intervals
     typingIntervals.value.forEach((interval) => {

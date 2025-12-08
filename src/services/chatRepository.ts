@@ -6,6 +6,7 @@ export type Conversation = {
   id: string;
   title: string;
   created_at?: string;
+  snippet?: string;
 };
 
 class ChatRepository {
@@ -89,10 +90,26 @@ class ChatRepository {
     return res.data;
   }
 
-  async searchConversations(): Promise<Conversation[]> {
-    // Placeholder: adjust endpoint if backend provides search query
-    const res = await this.client.get(`${API_CONFIG.ENDPOINTS.CHAT}/search`);
-    return res.data?.data || [];
+  async searchConversations(query: string, size = 20, cursor?: string): Promise<Conversation[]> {
+    const params = new URLSearchParams({
+      query,
+      size: size.toString(),
+    });
+    if (cursor) params.append("cursor", cursor);
+
+    const res = await this.client.get(`${API_CONFIG.ENDPOINTS.CHAT}/search?${params.toString()}`);
+
+    // Map the specific search response format to Conversation type
+    if (res.data?.data?.items) {
+      return res.data.data.items.map((item: any) => ({
+        id: item.session_id,
+        title: item.session_title,
+        created_at: item.created_at,
+        snippet: item.message_content
+      }));
+    }
+
+    return [];
   }
 
   async detailConversations(session_id: string) {
