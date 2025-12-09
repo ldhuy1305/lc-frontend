@@ -45,10 +45,12 @@
               class="esc-button" 
               @click="close"
               type="button"
-              title="Close (Esc)" 
+              title="Close" 
               aria-label="Close search"
             >
-              <span class="esc-text">Esc</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </button>
           </div>
 
@@ -91,9 +93,7 @@
                     {{ formatTime(conv.updated_at || conv.created_at) }}
                   </div>
                 </div>
-                <div class="result-enter-hint" v-if="activeIndex === index">
-                  Enter
-                </div>
+
               </div>
             </div>
 
@@ -109,11 +109,7 @@
             </div>
           </div>
           
-          <div class="footer-hint">
-            <span><kbd>↑</kbd> <kbd>↓</kbd> để di chuyển</span>
-            <span><kbd>Enter</kbd> để chọn</span>
-            <span><kbd>Esc</kbd> để đóng</span>
-          </div>
+
         </div>
       </div>
     </Transition>
@@ -305,24 +301,18 @@ const formatTime = (dateString) => {
   padding: 4px;
   display: flex;
   align-items: center;
-}
-
-.esc-text {
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
   border-radius: 4px;
-  padding: 2px 6px;
-  transition: all 0.2s;
+  color: #94a3b8;
 }
 
-.esc-button:hover .esc-text {
-  background: #e2e8f0;
-  color: #475569;
-  border-color: #cbd5e1;
+.esc-button:hover {
+  background: #f1f5f9;
+  color: #64748b;
 }
+
+
+
+
 
 .search-results {
   max-height: 400px;
@@ -380,13 +370,7 @@ const formatTime = (dateString) => {
   margin-top: 2px;
 }
 
-.result-enter-hint {
-  font-size: 11px;
-  color: #64748b;
-  padding: 2px 6px;
-  background: #e2e8f0;
-  border-radius: 4px;
-}
+
 
 .empty-state {
   padding: 32px;
@@ -399,25 +383,9 @@ const formatTime = (dateString) => {
     color: #94a3b8;
 }
 
-.footer-hint {
-  padding: 8px 16px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-  display: flex;
-  gap: 16px;
-  font-size: 11px;
-  color: #64748b;
-}
 
-kbd {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  padding: 1px 4px;
-  font-family: inherit;
-  font-weight: 500;
-  box-shadow: 0 1px 1px rgba(0,0,0,0.05);
-}
+
+
 
 /* Animations */
 .fade-enter-active,
